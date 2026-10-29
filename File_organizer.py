@@ -19,11 +19,8 @@ def move_files(file_paths, destination_dir):
 
 def expand_path(path_str):
     """Expand ~, ., .. and convert to absolute path"""
-    expanded = os.path.expanduser(path_str)
-    expanded = os.path.expandvars(expanded)
-    expanded = os.path.abspath(expanded)
-
-    return expanded
+    expanded = os.path.expandvars(os.path.expanduser(path_str))
+    return os.path.abspath(expanded)
 
 
 def validate_path(path_str):
@@ -48,12 +45,12 @@ def main():
     parser.add_argument("-r", "--dry-run", action="store_true", help="Simulates the file organization but don't touch anything.")
     args = parser.parse_args()
     
-    
+# scan the directory and extract the extensions     
     for entry in os.scandir(args.path):
         if entry.is_file() and '.' in entry.name:
             ext = entry.name.split('.')[-1]
             files_dict[ext].append(entry.path)
-       
+              
     if not args.dry_run:    
         for ext, file_paths in files_dict.items():
             dest_dir = os.path.join(args.path, f"{args.prefix}_{ext}")
