@@ -1,15 +1,62 @@
 # file-organizer
-- [ ] Smart file organizer using regex to group and move files by extension with dynamic folder creation.
-- [ ] Never overwrite or delete anything.
-- [ ] Skip hidden files (.bashrc), symlinks, subfolders, files without an extension, and its own organized_* folders. Work only on the top level of the folder you point it at.
-- [ ] Group extensions case-insensitively, so JPG and jpg end up together. Also decide how to handle archive.tar.gz. The simplest rule is to use the last extension (gz) and document it.
-- [ ] One failure doesn't stop the rest. At the end it prints a summary (moved, skipped, failed) and exits with a non-zero code if anything failed. 
-- [ ] Running it twice does nothing the second time. That property is called idempotency, and it's a good habit for any automation tool.
-- [ ] Dry-run uses the same logic as the real run. The program first builds a plan (a list of "move this file here"), then either prints it or carries it out. Because both modes share one plan, the dry-run can't lie. This is the most important design decision in the project.
 
+A small command-line tool that organizes files in a directory by extension.
+It builds a plan first, then either prints it (dry-run) or carries it out —
+both modes share the same plan, so the dry-run can't lie about what the real
+run would do.
 
-# TODO later:
+## Usage
 
-- [ ] add "--overwrite" flag so files that are action==skip & reason==collision become action = move and be moved.
-- [ ] add "descend into subdirectories"
+    python file_organizer.py ~/Downloads           # organize
+    python file_organizer.py ~/Downloads -n        # dry-run (preview only)
+    python file_organizer.py ~/Downloads -p sorted # custom prefix (default: organized)
+
+Files are moved into `<prefix>_<extension>/` subdirectories.
+`foo.txt` → `organized_txt/foo.txt`.
+`bar.JPG` → `organized_jpg/bar.JPG` (case-insensitive directory grouping,
+original filename case preserved).
+`archive.tar.gz` → `organized_gz/archive.tar.gz` (last extension wins —
+documented as the simplest rule).
+
+## What gets skipped, and why
+
+- **Hidden files** (`.bashrc`) — hidden files are typically config the user
+  placed deliberately; relocating them is the wrong default.
+- **Symlinks** — moving a symlink can break relative-path resolution in ways
+  the program can't predict from the source location.
+- **Files without extension** (`notes`) — no extension means no group to
+  organize into.
+- **Name collisions at target** — never overwrite; the existing file at the
+  target wins.
+- **Directories** (including existing `organized_*` folders) — the tool only
+  looks at the top level of the directory you point it at.
+
+## Behavior
+
+- **Plan-first architecture**: the program builds a list of `PlanEntry`
+  records (one per file) before doing anything. The dry-run prints the plan;
+  the real run executes it. Because both read the same data, the dry-run
+  can't drift from what the real run would do.
+- **Idempotent**: running twice changes nothing the second time. After the
+  first run, the only things left at top level are files that were skipped
+  (hidden, symlinks, no-ext, collisions) — they'll be skipped again.
+- **One failure doesn't stop the rest**: a failed `shutil.move` (permission
+  denied, disk full, etc.) is recorded and the next file is attempted.
+- **Never overwrite or delete**: collisions skip; nothing is clobbered.
+
+## Output
+
+Real run prints one summary line:
+
+    Moved: 5 | Skipped: 5 (hidden: 1, no_ext: 2, symlink: 1, collision: 1) | Failed: 0
+
+Dry-run prints one line per file:
+
+    element.log    -> /home/user/Downloads/organized_log/element.log (move)
+    .bashrc        -> (skip: hidden)
+
+## Exit codes
+
+- `0`: clean run (skips don't count as failures)
+- `1`: one or more move attempts failed
 
